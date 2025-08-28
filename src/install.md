@@ -1,8 +1,8 @@
-# Install
+# 安装
 
 ## Github Release
 
-Download compiled executable for your platform and operating system on the [release page](https://github.com/criyle/go-judge/releases).
+从 [release page](https://github.com/criyle/go-judge/releases) 下载对应架构和操作系统的版本运行。
 
 ## Docker
 
@@ -10,14 +10,14 @@ Download compiled executable for your platform and operating system on the [rele
 docker run -it --privileged --shm-size=256m -p 5050:5050 criyle/go-judge
 ```
 
-The `--privileged` flag is used for container nesting, and the user program is running in restricted nested containers securely.
+`--privileged` 用于开启容器嵌套，用户程序会安全的在容器的限制下运行。
 
-Or build your own image like this
+也可以通过以下方式构建自己的镜像
 
 ```Dockerfile
 FROM criyle/go-judge:latest AS go-judge 
 FROM debian:latest
-# install compilers
+# 安装需要的编译器
 RUN apt ...
 WORKDIR /opt
 COPY --from=go-judge /opt/go-judge /opt/mount.yaml /opt/
@@ -27,7 +27,7 @@ ENTRYPOINT ["./go-judge"]
 
 ## Nix
 
-If you have nix installed, you can install `go-judge` from [nixpkgs](https://search.nixos.org/packages?channel=unstable&from=0&size=50&sort=relevance&type=packages&query=go-judge)
+如果安装了 `nix` 可以从 [nixpkgs](https://search.nixos.org/packages?channel=unstable&from=0&size=50&sort=relevance&type=packages&query=go-judge) 安装  `go-judge`。
 
 ```sh
 nix-env -iA nixpkgs.go-judge

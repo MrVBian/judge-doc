@@ -1,55 +1,55 @@
-# 文件系统挂载
+# File System Mount
 
-## 容器的文件系统
+## Container Root File System
 
 ```mermaid
 flowchart LR
 
-subgraph 主机
+subgraph host
 hbin["/bin,/usr<br/>/etc/ld.so.cache"]
 hlib["/lib,/lib64"]
-hal["/etc/alternatives<br/>编译器的配置文件路径"]
+hal["/etc/alternatives<br/>compiler specific configs"]
 hdev["/dev/{null,urandom,random,zero,full}"]
 huid["uid,gid"]
 end
 
-subgraph 容器
+subgraph container
 cbin["/bin,/usr<br/>/etc/ld.so.cache"]
 clib["/lib,/lib64"]
-cal["/etc/alternatives<br/>编译器的配置文件路径"]
+cal["/etc/alternatives<br/>compiler specific configs"]
 cdev["/dev/{null,urandom,random,zero,full}"]
-proc["/proc (只读并且遮蔽部分敏感内容)"]
-temp["/w,/tmp (限制大小的可写 tmpfs)"]
+proc["/proc (readonly & masked)"]
+temp["/w,/tmp (restricted writable tmpfs)"]
 cuid["uid,gid"]
-net["隔离的网络"]
+net["isolated network,domain,ipc"]
 end
 
-hbin -- 二进制文件 (只读) --> cbin
-hlib -- 共享库 (只读) --> clib
-hal -- 编译器配置文件 (只读) --> cal
-hdev <-- 常用设备 (可读写) --> cdev
-huid -- uid/gid 映射 & 降权为普通用户 --> cuid
+hbin -- binaries (readonly) --> cbin
+hlib -- libraries (readonly) --> clib
+hal -- compiler configs (readonly) --> cal
+hdev <-- common devices (read/write) --> cdev
+huid -- uid/gid map & dropped capabilities --> cuid
 ```
 
-在 Linux 平台，默认只读挂载点包括主机的 `/lib`, `/lib64`, `/usr`, `/bin`, `/etc/ld.so.cache`, `/etc/alternatives`, `/etc/fpc.cfg`, `/dev/null`, `/dev/urandom`, `/dev/random`, `/dev/zero`, `/dev/full` 和临时文件系统 `/w`, `/tmp` 以及 `/proc`。
+On Linux platform, the default mounts points are bind mounting host's `/lib`, `/lib64`, `/usr`, `/bin`, `/etc/ld.so.cache`, `/etc/alternatives`, `/etc/fpc.cfg`, `/dev/null`, `/dev/urandom`, `/dev/random`, `/dev/zero`, `/dev/full` and mounts tmpfs at `/w`, `/tmp` and creates `/proc`.
 
-使用 `mount.yaml` 定制容器文件系统。
+To customize mount points, please look at example `mount.yaml` file.
 
-`/w` 的 `/tmp` 挂载 `tmpfs` 大小通过 `-tmp-fs-param` 指定，默认值为 `size=128m,nr_inodes=4k`
+`tmpfs` size for `/w` and `/tmp` is configured through `-tmp-fs-param` with default value `size=128m,nr_inodes=4k`
 
-如果在容器的根目录存在 `/.env` 文件，那么这个文件会在容器创建时被载入。文件的每一行会作为环境变量的初始值加入到运行程序当中。
+If a file named `/.env` exists in the container rootfs, the container will load the file as environment variable line by line.
 
-如果之后指定的挂载点目标在之前的挂载点之下，那么需要保证之前的挂载点存在目标文件或者文件夹。
+If a bind mount is specifying a target within the previous mounted one, please ensure the target exists in the previous mount point.
 
-## 自定义挂载
+## Customization
 
-请将接下来的文件命名为 `mount.yaml` 并保存你的配置目录，然后为 `go-judge` 指定 `-mount-conf 你的配置目录/mount.yaml` 命令行参数启动。在添加配置后，请留意输出的 log 来确保配置文件生效。
+Please save the `mount.yaml` in your configuration directory, and add `-mount-conf conf_dir/mount.yaml` to the command line argument of `go-judge`. After the configuration, you should check the log output to make sure the configuration is effective.
 
 :::code-group
 
 ```yaml [mount.yaml]
 mount:
-  # 基本配置
+  # Basic binaries and libraries
   - type: bind
     source: /bin
     target: /bin
@@ -70,7 +70,7 @@ mount:
     source: /etc/ld.so.cache
     target: /etc/ld.so.cache
     readonly: true
-  # 有些编译器有多版本
+  # Some compiler have multiple versions
   - type: bind
     source: /etc/alternatives
     target: /etc/alternatives
@@ -125,11 +125,11 @@ mount:
   # - type: tmpfs
   #   target: /dev/shm
   #   data: size=64m,nr_inodes=4k
-  # （可选）挂载 /etc/passwd 显示用户名，例子在特殊文件部分
+  # (optional) bind a /etc/passwd to show customized user name. See special files below for examples
   - type: bind
     source: containerPasswd.txt
     target: /etc/passwd
-  # （可选） 挂载 /.env 加载自定义环境变量，例子在特殊文件部分
+  # (optional) bind a /.env to load default environment variable for the container. See special files below for examples
   - type: bind
     source: dotenv
     target: /.env
@@ -141,9 +141,9 @@ mount:
   #  # readonly: true
 # java & ghc wants /proc/self/exe
 proc: true
-# procrw 给予 /proc 可读写权限，在特殊情况下需要。例如 CUDA
+# procrw enables read-write permission on /proc for special usage like CUDA
 #procrw: true
-# （可选） 创建常用软连接。如果留空，则默认配置如下
+# (optional) create /dev standard io. Default value as follows if empty
 symLink:
   - linkPath: /dev/fd
     target: /proc/self/fd
@@ -153,7 +153,7 @@ symLink:
     target: /proc/self/fd/1
   - linkPath: /dev/stderr
     target: /proc/self/fd/2
-# （可选）遮蔽部分系统敏感文件。如果留空，则默认配置如下
+# (optional) mask mounted paths with empty / null mount. Default value as follows if empty
 maskPath:
   - /sys/firmware
   - /sys/devices/virtual/powercap
@@ -168,24 +168,24 @@ maskPath:
   - /proc/scsi
   - /usr/lib/wsl/drivers
   - /usr/lib/wsl/lib
-# 容器工作目录
+# container work directory
 workDir: /w
-# 容器 host name
+# container host name
 hostName: go-judge
-# 容器 domain name
+# container domain name
 domainName: go-judge
-# 容器用户 id
+# container user uid
 uid: 1536
-# 容器用户组 id
+# container user gid
 gid: 1536
 # MPI want network
-# 在沙箱初始化之后额外执行的命令，例如接下来的命令时初始化容器本地回环网络
+# init cmd does additional setups. For example, the following command initialized the loopback network in container
 #initCmd: ip link set dev lo up
 ```
 
 :::
 
-### 特殊文件
+### Special Files
 
 :::code-group
 
@@ -195,8 +195,9 @@ go-judge:x:1536:1536::/w:/bin/bash
 ```
 
 ```text [dotenv]
-# /.env 文件指定默认环境变量，每行一个
-# 空行和 # 开始的注释会被忽略，不需要给环境变量加上双引号
+# /.env file should contain environment variable line by line
+# empty line or line start with # are ignored
+# double quote is not parsed and should not be used
 TESTENV=true
 ```
 

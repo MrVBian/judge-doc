@@ -1,12 +1,14 @@
-# Examples
+# 示例
 
-Please use PostMan or similar tools to send request to `http://localhost:5050/run`
+请使用 postman 或其他 REST API 调试工具向 `http://localhost:5050/run` 发送请求
 
-## Single Execution
+## 单个c++文件编译运行
 
-This example require `apt install g++` inside the container
+这个例子需要安装 `g++`。如果在 docker 环境中运行，请在容器中（`docker exec -it go-judge /bin/bash`）执行 `apt update && apt install g++`
 
-### Compile Request
+需要注意，在生产环境中 `copyOutCached` 产生的文件在使用完之后需要使用（`DELETE /file/:id`）删除避免内存泄露
+
+### 编译请求
 
 ```json
 {
@@ -31,7 +33,7 @@ This example require `apt install g++` inside the container
             }
         },
         "copyOut": ["stdout", "stderr"],
-        "copyOutCached": ["a.cc", "a"]
+        "copyOutCached": ["a"]
     }]
 }
 ```
@@ -49,14 +51,13 @@ This example require `apt install g++` inside the container
             "stdout": ""
         },
         "fileIds": {
-            "a": "5LWIZAA45JHX4Y4Z", // record binary file id for subsequent request
-            "a.cc": "NOHPGGDTYQUFRSLJ"
+            "a": "5LWIZAA45JHX4Y4Z" // 需要保存编译的二进制文件 id
         }
     }
 ]
 ```
 
-### Execution Request
+### 运行请求
 
 ```json
 {
@@ -77,7 +78,7 @@ This example require `apt install g++` inside the container
         "procLimit": 50,
         "copyIn": {
             "a": {
-                "fileId": "5LWIZAA45JHX4Y4Z" // saved file id from previous request
+                "fileId": "5LWIZAA45JHX4Y4Z" // 这个缓存文件的 ID 来自上一个请求返回的 fileIds
             }
         }
     }]
@@ -100,9 +101,9 @@ This example require `apt install g++` inside the container
 ]
 ```
 
-Please make sure to call `DELETE /file/:fileId` to delete the cached file to avoid cache leak.
+运行完成后，请调用 `DELETE /file/:id` 删除编译的二进制文件，避免缓存泄漏。
 
-## Multiple (interaction problem)
+## 多个程序（例如交互题）
 
 ```json
 {
@@ -173,71 +174,24 @@ Please make sure to call `DELETE /file/:fileId` to delete the cached file to avo
 ]
 ```
 
-## Compile On Windows (cygwin)
+## 开启 CPURate 限制的死循环
 
 ```json
 {
     "cmd": [{
-        "args": ["C:\\Cygwin\\bin\\g++", "a.cc", "-o", "a"],
-        "env": ["PATH=C:\\Cygwin\\bin;"],
-        "files": [{
-            "content": ""
-        }, {
-            "name": "stdout",
-            "max": 10240
-        }, {
-            "name": "stderr",
-            "max": 10240
-        }],
-        "cpuLimit": 10000000000,
-        "memoryLimit": 104857600,
-        "procLimit": 50,
-        "copyIn": {
-            "a.cc": {
-                "content": "#include <iostream>\n#include <signal.h>\n#include <unistd.h>\nusing namespace std;\nint main() {\nint a, b;\ncin >> a >> b;\ncout << a + b << endl;\n}"
-            }
-        },
-        "copyOutCached": ["a.exe"]
-    }]
-}
-```
-
-```json
-[
-    {
-        "status": "Accepted",
-        "exitStatus": 0,
-        "time": 140625000,
-        "memory": 36286464,
-        "files": {
-            "stderr": "",
-            "stdout": ""
-        },
-        "fileIds": {
-            "a.exe": "HLQH2OF4MXUUJBCB"
+    "args": ["/usr/bin/python3", "1.py"],
+    "env": ["PATH=/usr/bin:/bin"],
+    "files": [{"content": ""}, {"name": "stdout","max": 10240}, {"name": "stderr","max": 10240}],
+    "cpuLimit": 3000000000,
+    "clockLimit": 4000000000,
+    "memoryLimit": 104857600,
+    "procLimit": 50,
+    "cpuRate": 0.1,
+    "copyIn": {
+        "1.py": {
+            "content": "while True:\n    pass"
         }
-    }
-]
-```
-
-## Infinite loop with cpu rate control
-
-```json
-{
- "cmd": [{
-  "args": ["/usr/bin/python3", "1.py"],
-  "env": ["PATH=/usr/bin:/bin"],
-  "files": [{"content": ""}, {"name": "stdout","max": 10240}, {"name": "stderr","max": 10240}],
-  "cpuLimit": 3000000000,
-  "clockLimit": 4000000000,
-  "memoryLimit": 104857600,
-  "procLimit": 50,
-  "cpuRate": 0.1,
-  "copyIn": {
-    "1.py": {
-      "content": "while True:\n    pass"
-    }
-  }}]
+    }}]
 }
 ```
 
@@ -255,134 +209,4 @@ Please make sure to call `DELETE /file/:fileId` to delete the cached file to avo
         }
     }
 ]
-```
-
-### FFI
-
-Require compilation of `go-judge-cinit` and `go-judge-ffi`
-
-```javascript
-var ffi = require('ffi-napi');
-
-var go_judge = ffi.Library('./go-judge-ffi', {
-    'Init': ['int', ['string']],
-    'Exec': ['string', ['string']],
-    'FileList': ['string', []],
-    'FileAdd': ['string', ['string']],
-    'FileGet': ['string', ['string']],
-    'FileDelete': ['string', ['string']]
-});
-
-if (go_judge.Init(JSON.stringify({
-    cinitPath: "/judge/go-judge-cinit",
-    parallelism: 4,
-}))) {
-    console.log("Failed to init go judge");
-}
-
-const result = JSON.parse(go_judge.Exec(JSON.stringify({
-    "cmd": [{
-        "args": ["/bin/cat", "test.txt"],
-        "env": ["PATH=/usr/bin:/bin"],
-        "files": [{
-            "content": ""
-        }, {
-            "name": "stdout",
-            "max": 10240
-        }, {
-            "name": "stderr",
-            "max": 10240
-        }],
-        "cpuLimit": 10000000000,
-        "memoryLimit": 104857600,
-        "procLimit": 50,
-        "copyIn": {
-            "test.txt": {
-                "content": "TEST"
-            }
-        }
-    }]
-})));
-console.log(result);
-
-// Async
-go_judge.Exec.async(JSON.stringify({
-    "cmd": [{
-        "args": ["/bin/cat", "test.txt"],
-        "env": ["PATH=/usr/bin:/bin"],
-        "files": [{
-            "content": ""
-        }, {
-            "name": "stdout",
-            "max": 10240
-        }, {
-            "name": "stderr",
-            "max": 10240
-        }],
-        "cpuLimit": 10000000000,
-        "memoryLimit": 104857600,
-        "procLimit": 50,
-        "copyIn": {
-            "test.txt": {
-                "content": "TEST"
-            }
-        }
-    }]
-}), (err, res) => {
-    if (err) throw err;
-    console.log(JSON.parse(res));
-});
-
-const fileAdd = (param) => new Promise((resolve, reject) => {
-    go_judge.FileAdd.async(JSON.stringify(param), (err, res) => {
-        if (err != null) { reject(err); } else { resolve(res); }
-    });
-});
-const fileList = () => new Promise((resolve, reject) => {
-    go_judge.FileList.async((err, res) => {
-        if (err != null && res == null) { reject(err); } else { resolve(JSON.parse(res)); }
-    });
-});
-const fileGet = (param) => new Promise((resolve, reject) => {
-    go_judge.FileGet.async(JSON.stringify(param), (err, res) => {
-        if (err != null && res == null) { reject(err); } else { resolve(res); }
-    });
-});
-const fileDelete = (param) => new Promise((resolve, reject) => {
-    go_judge.FileDelete.async(JSON.stringify(param), (err, res) => {
-        if (err != null && res == null) { reject(err); } else { resolve(res); }
-    });
-});
-
-const fileOps = async () => {
-    const fileId = await fileAdd({ name: 'Name', content: 'Content' });
-    console.log(fileId);
-    const list = await fileList();
-    console.log(list);
-    const file = await fileGet({ id: fileId });
-    console.log(file);
-    const d = await fileDelete({ id: fileId });
-    console.log(d);
-    const e = await fileList();
-    console.log(e);
-};
-
-fileOps();
-```
-
-Output:
-
-```javascript
-{
-  requestId: '',
-  results: [
-    {
-      status: 'Accepted',
-      exitStatus: 0,
-      time: 814048,
-      memory: 253952,
-      files: [Object]
-    }
-  ]
-}
 ```

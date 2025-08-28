@@ -1,40 +1,20 @@
-# Build
+# 编译
 
-## Build go judge
+## 编译 docker
 
-Build by your own `docker build -t go-judge -f Dockerfile.exec .`
+终端中运行 `docker build -t go-judge -f Dockerfile.exec .`
 
-For cgroup v1, the `go-judge` need root privilege to create `cgroup`. Either creates sub-directory `/sys/fs/cgroup/cpuacct/go_judge`, `/sys/fs/cgroup/memory/go_judge`, `/sys/fs/cgroup/pids/go_judge` and make execution user readable or use `sudo` to run it.
+沙箱服务需要特权级别 docker 来创建子容器和提供 cgroup 资源限制。
 
-For cgroup v2, systemd dbus will be used to create a transient scope for cgroup integration.
+## 编译沙箱终端
 
-## Build Shared object
+编译 `go build ./cmd/go-judge-shell`
 
-Build container init `cinit`:
+运行 `./go-judge-shell`，需要打开 gRPC 接口来使用。提供一个沙箱内的终端环境。
 
-`go build -o cinit ./cmd/go-judge-init`
+## 编译 Docker 镜像
 
-Build `go_judge.so`:
-
-`go build -buildmode=c-shared -o go_judge.so ./cmd/go-judge-ffi/`
-
-For example, in JavaScript, run with `ffi-napi` (seems node 14 is not supported yet):
-
-## Build gRPC Proxy
-
-Build `go build ./cmd/go-judge-proxy`
-
-Run `./go-judge-proxy`, connect to gRPC endpoint expose as a REST endpoint.
-
-## Build go judge Shell
-
-Build `go build ./cmd/go-judge-shell`
-
-Run `./go-judge-shell`, connect to gRPC endpoint with interactive shell.
-
-## Build Docker
-
-Create `Dockerfile` with the following content `go-judge` repository and run `docker build -t go-judge .`.
+在 `go-judge` 目录下使用下面的示例创建 `Dockerfile` ，然后运行 `docker build -t go-judge .` 构建。
 
 :::code-group
 

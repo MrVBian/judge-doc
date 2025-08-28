@@ -2,64 +2,65 @@ import { withMermaid } from "vitepress-plugin-mermaid";
 
 // https://vitepress.dev/reference/site-config
 export default withMermaid ({
-  title: "Go Judge Documentation",
-  description: "Go Judge Documentation",
+  title: "测题机文档",
+  description: "测题机文档",
   srcDir: "src",
   cleanUrls: true,
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     nav: [
-      { text: 'Home', link: '/' },
-      { text: 'Documentation', link: '/install' }
+      { text: '主页', link: '/' },
+      { text: '文档', link: '/install' }
     ],
 
     sidebar: [
       {
-        text: 'Documentations',
+        text: '文档',
         items: [
-          { text: 'Install', link: '/install' },
-          { text: 'Design', link: '/design' },
+          { text: '安装', link: '/install' },
+          { text: '设计', link: '/design' },
           { text: 'API', link: '/api' },
-          { text: 'Example Requests', link: '/example' },
-          { text: 'Configuration', link: '/configuration' },
-          { text: 'File System Mount', link: '/mount' },
-          { text: 'Build', link: '/build' },
-          { text: 'Scale', link: '/scale' },
+          { text: '请求实例', link: '/example' },
+          { text: '配置', link: '/configuration' },
+          { text: '文件系统挂载', link: '/mount' },
+          { text: '编译', link: '/build' },
+          { text: '拓展', link: '/scale' },
         ]
       }
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/criyle/go-judge' }
+      { icon: 'github', link: 'https://github.com/criyle/go-judge' },
+      { icon: 'github', link: 'https://github.com/orgs/Bunane-Tech/repositories' }
     ]
   },
   locales: {
     root: {
-      label: 'English',
-      lang: 'en',
-    },
-    cn: {
       label: '中文',
       lang: 'cn',
-      title: "Go Judge 文档",
+    },
+    cn: {
+      label: 'English',
+      lang: 'en',
+      title: "Judge Documentation",
       themeConfig: {
         nav: [
-          { text: '主页', link: '/cn' },
-          { text: '文档', link: '/cn/install' }
+          { text: 'Home', link: '/en' },
+          { text: 'Documentation', link: '/en/install' }
         ],
 
         sidebar: [
           {
-            text: '文档',
+            text: 'Documentations',
             items: [
-              { text: '安装', link: '/cn/install' },
-              { text: '设计', link: '/cn/design' },
-              { text: 'API', link: '/cn/api' },
-              { text: '请求实例', link: '/cn/example' },
-              { text: '配置', link: '/cn/configuration' },
-              { text: '文件系统挂载', link: '/cn/mount' },
-              { text: '编译', link: '/cn/build' },
-              { text: '拓展', link: '/cn/scale' },
+              { text: 'Install', link: '/en/install' },
+              { text: 'Design', link: '/en/design' },
+              { text: 'API', link: '/en/api' },
+              { text: 'Example Requests', link: '/en/example' },
+              { text: 'Configuration', link: '/en/configuration' },
+              { text: 'File System Mount', link: '/en/mount' },
+              { text: 'Build', link: '/en/build' },
+              { text: 'Scale', link: '/en/scale' },
             ]
           }
         ],

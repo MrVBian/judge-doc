@@ -1,136 +1,116 @@
-# Design
+# 设计
 
-## Prerequisite
+## 运行要求
 
-- Linux Kernel Version >= 3.10
-- Cgroup file system mounted at /sys/fs/cgroup. Usually done by systemd
+- Linux 内核版本 >= 3.10
+- 系统 Cgroup 文件系统挂载于 `/sys/fs/cgroup` (Systemd 默认)
 
-## Architecture
+## 系统架构
 
 ```mermaid
 block-beta
   columns 5
-  a["Transport Layer"]:5
-  b["Sandbox Worker"]:5
-  c["EnvExec"]:3 d["File Store"]:2
-  e["Linux (go-sandbox)"] f["Windows (winc)"] g["macOS (app sandbox)"] h["Shared Memory"] i["Disk"]
+  a["传输层"]:5
+  b["工作协程"]:5
+  c["运行环境"]:3 d["文件存储"]:2
+  e["Linux (go-sandbox)"] f["Windows (winc)"] g["macOS (app sandbox)"] h["共享内存"] i["磁盘"]
 ```
 
-## Execution Workflow
+## 工作流
 
 ```mermaid
 flowchart TB
 
-s((Start)) --> copyIn
+s((开始)) --> copyIn
 
 subgraph copyIn[copy in * n]
-oh[open host file] --> oc[open container file]
-oc --> cc[copy file content]
+oh[打开宿主机文件] --> oc[打开容器文件]
+oc --> cc[复制文件内容]
 end
 
-copyIn --> exe[start program in container with restrictions]
-wait(wait program to exit & check resource usages)
+copyIn --> exe[在容器内运行资源受限的用户程序]
+wait(等待用户程序结束，同时检查资源使用情况)
 exe --> wait
 wait --> copyOut
 
 subgraph copyOut[copy out * n]
-oho[open host file] --> oco[open container file]
-oco --> cco[copy file content]
+oho[打开宿主机文件] --> oco[打开容器文件]
+oco --> cco[复制文件内容]
 end
 
-readStat(Read Statistic)
+readStat(读取资源使用)
 copyOut --> readStat
-readStat --> e((end))
+readStat --> e((结束))
 ```
 
-## Return Status
+## /run 接口返回状态
 
-- Accepted: Program exited with status code 0 within time & memory limits
-- Memory Limit Exceeded: Program uses more memory than memory limits
+- Accepted: 程序在资源限制内正常退出
+- Memory Limit Exceeded: 超出内存限制
 - Time Limit Exceeded:
-  - Program uses more CPU time than cpuLimit
-  - Or, program uses more clock time than clockLimit
+  - 超出 `timeLimit` 时间限制
+  - 或者超过 `clockLimit` 等待时间限制
 - Output Limit Exceeded:
-  - Program output more than pipeCollector limits
-  - Or, program output more than output-limit
+  - 超出 `pipeCollector` 限制
+  - 或者超出 `-output-limit` 最大输出限制
 - File Error:
-  - CopyIn file is not existed
-  - Or, CopyIn file too large for container file system
-  - Or, CopyOut file is not existed after program exited
-- Non Zero Exit Status: Program exited with non 0 status code within time & memory limits
-- Signalled: Program exited with signal (e.g. SIGSEGV)
-- Dangerous Syscall: Program killed by seccomp filter
+  - `copyIn` 指定文件不存在
+  - 或者 `copyIn` 指定文件大小超出沙箱文件系统限制
+  - 或者 `copyOut` 指定文件不存在
+- Non Zero Exit Status: 程序用非 0 返回值退出
+- Signalled: 程序收到结束信号而退出（例如 `SIGSEGV`）
+- Dangerous Syscall: 程序被 `seccomp` 过滤器结束
 - Internal Error:
-  - Program is not exist
-  - Or, container create not successful (e.g. not privileged docker)
-  - Or, other errors
+  - 指定程序路径不存在
+  - 或者容器创建失败
+    - 比如使用非特权 docker
+    - 或者在个人目录下以 root 权限运行
+  - 或者其他错误
 
-## Packages
+## 包
 
-- envexec: run single / group of programs in parallel within restricted environment and resource constraints
-- env: reference implementation environments to inject into envexec
+- envexec: 核心逻辑包，在提供的环境中运行一个或多个程序
+- env: 环境的标准实现
 
-## Windows Support
-
-- Build `go-judge` by: `go build ./cmd/go-judge/`
-- Build `go_judge.dll`: (need to install `gcc` as well) `go build -buildmode=c-shared -o go_judge.so ./cmd/go-judge-ffi/`
-- Run: `./go-judge`
-
-### Windows Security
-
-- Resources are limited by [JobObject](https://docs.microsoft.com/en-us/windows/win32/procthread/job-objects)
-- Privilege are limited by [Restricted Low Mandatory Level Token](https://docs.microsoft.com/en-us/windows/win32/secauthz/access-tokens)
-- Low Mandatory Level directory is created for read / write
-
-## MacOS Support
-
-- Build `go-judge` by: `go build ./cmd/go-judge/`
-- Build `go_judge.dylib`: (need to install `XCode`) `go build -buildmode=c-shared -o go_judge.dylib ./cmd/go-judge-ffi/`
-- Run: `./go-judge`
-
-### MacOS Security
-
-- `sandbox-init` profile deny network access and file read / write and read / write to `/Users` directory
-
-## Notice
+## 注意
 
 > [!WARNING]  
-> Window and macOS support are experimental and should not be used in production environments
+> Window 和 macOS 平台为实验性支持，请不要在生产环境使用
 
-### cgroup usage
+### 使用 cgroup
 
-For cgroup v1, the `go-judge` need root privilege to create `cgroup`. Either creates sub-directory `/sys/fs/cgroup/cpuacct/gojudge`, `/sys/fs/cgroup/memory/gojudge`, `/sys/fs/cgroup/pids/gojudge` and make execution user readable or use `sudo` to run it.
+在 cgroup v1 系统上 `go-judge` 需要 `root` 权限创建 `cgroup`。请使用 `sudo` 以 `root` 用户运行或者确保运行用户拥有以下目录的读写权限 `/sys/fs/cgroup/cpuacct/gojudge`, `/sys/fs/cgroup/memory/gojudge`, `/sys/fs/cgroup/pids/gojudge`。
 
-For cgroup v2, systemd dbus will be used to create a transient scope for cgroup integration.
+在 cgroup v2 系统上，`go-judge` 会和 `system dbus` 沟通，创建一个临时 `scope`。如果 `systemd` 不存在，并且拥有 `root` 权限那么将尝试进行嵌套初始化。
 
-If no permission to create cgroup, the cgroup related limit will not be effective.
+如果没有 `cgroup` 的权限，那么 `cgroup` 相关的资源配置将不会生效。
 
-### cgroup v2 support
+### cgroup v2
 
-The cgroup v2 is supported by `go-judge` now when running as root since more Linux distribution are enabling cgroup v2 by default (e.g. Ubuntu 21.10+, Fedora 31+). However, for kernel < 5.19, due to missing `memory.max_usage_in_bytes` in `memory` controller, the memory usage is now accounted by `maxrss` returned by `wait4` syscall. Thus, the memory usage appears higher than those who uses cgroup v1. For kernel >= 5.19, `memory.peak` is being used.
+`go-judge` 目前已经支持 cgroup v2 鉴于越来越多的 Linux 发行版默认启用 cgroup v2 而不是 v1 （比如 Ubuntu 21.10+，Fedora 31+）。然而，对于内核版本小于 5.19 的版本，因为 cgroup v2 在内存控制器里面缺少 `memory.max_usage_in_bytes`，内存使用量计数会转而采用 `maxrss` 指标。这项指标会显示的比使用 cgroup v1 时候要稍多，在运行使用内存较少的程序时比较明显。对于内核版本大于或等于 5.19 的版本，`memory.peak` 会被采用。
 
-When running in containers, the `go-judge` will migrate all processed into `/api` hierarchy to enable nesting support.
+同时，如果本程序在容器中运行，容器中的进程会被移到 `/api` cgroup v2 控制器中来开启 cgroup v2 嵌套支持。
 
-When running in Linux distributions powered by `systemd`, the `go-judge` will contact `systemd` via `dbus` to create a transient scope as cgroup root.
+在 `systemd` 为 `init` 的发行版中运行时，`go-judge` 会使用 `dbus` 通知 `systemd` 来创建一个临时 `scope` 作为 `cgroup` 的根。
 
-When running with kernel >= 5.7, the `go-judge` will try faster `clone3(CLONE_INTO_CGROUP)` method.
+在高于 5.7 的内核中运行时，`go-judge` 会尝试更快的 `clone3(CLONE_INTO_CGROUP)` 方法.
 
-### Memory Usage
+### 内存使用
 
-The controller will consume `20M` memory and each container will consume `20M` + size of tmpfs `2 * 128M`. For each request, it consumes as much as user program limit + extra limit (`16k`) + total copy out max. Notice that the cached file stores in the shared memory (`/dev/shm`) of the host, so please ensure enough size allocated.
+控制进程通常会使用 `20M` 内存，每个容器进程最大会使用 `20M` 内存，每个请求最大会使用 `2 * 16M` + 总 copy out max 限制 * 2 内存。请注意，缓存文件会存储在宿主机的共享内存中 (`/dev/shm`)，请保证其大小足够存储运行时最大可能文件。
 
-For example, when concurrency = 4, the container itself can consume as much as `60 + (20+32) * 4M = 268M` + 4 * total copy out + total max memory of requests.
+比方说当同时请求数最大为 4 的时候，本程序最大会占用 `60 + (20+32) * 4M = 268M` + 总 copy out max 限制 * 8 内存 + 总运行程序最大内存限制。
 
-Due to limitation of GO runtime, the memory will not return to OS automatically, which could lead to OOM killer. The background worker was introduced to checks heap usage and invokes GC when necessary.
+因为 go 语言 runtime 垃圾收集算法实现的问题，它并不会主动归还占用内存。这种情况可能会引发 OOM Killer 杀死进程。加入了一个后台检查线程用于在堆内存占用高时强制垃圾收集和归还内存。
 
-- `-force-gc-target` default `20m`, the minimal size to trigger GC
-- `-force-gc-interval` default `5s`, the interval to check memory usage
+- `-force-gc-target` 默认 `20m`, 堆内存使用超过该值是强制垃圾收集和归还内存
+- `-force-gc-interval` 默认 `5s`, 为后台线程检查的频繁程度
 
-## Benchmark
+## 压力测试
 
-By `wrk` with `t.lua`: `wrk -s t.lua -c 1 -t 1 -d 30s --latency http://localhost:5050/run`.
+使用 `wrk` 和 `t.lua`: `wrk -s t.lua -c 1 -t 1 -d 30s --latency http://localhost:5050/run`.
 
-However, these results are not the real use cases since the running time depends on the actual program specifies in the request. Normally, the go judge consumes ~1ms more compare to running without sandbox.
+注意，这些结果只是极限情况下的表现，实际情况和使用方式相关。通常沙箱服务相比于直接运行程序，通常有 1 毫秒左右额外延迟。
 
 ```lua
 wrk.method = "POST"
@@ -138,10 +118,10 @@ wrk.body   = '{"cmd":[{"args":["/bin/cat","a.hs"],"env":["PATH=/usr/bin:/bin"],"
 wrk.headers["Content-Type"] = "application/json;charset=UTF-8"
 ```
 
-- Single thread ~800-860 op/s Windows 10 WSL2 @ 5800X
-- Multi thread ~4500-6000 op/s Windows 10 WSL2 @ 5800X
+- 单线程 ~800-860 op/s Windows 10 WSL2 @ 5800X
+- 多线程 ~4500-6000 op/s Windows 10 WSL2 @ 5800X
 
-Single thread:
+单线程:
 
 ```text
 Running 30s test @ http://localhost:5050/run
@@ -159,78 +139,78 @@ Requests/sec:    864.88
 Transfer/sec:    234.68KB
 ```
 
-## go-sandbox Container Protocol
+## go-sandbox 容器协议
 
 ```mermaid
 sequenceDiagram
 
-box host
-participant u as go-sandbox container api
-participant s as container environment
+box 主机
+participant u as go-sandbox 容器 api
+participant s as 容器环境
 end
 
 create participant c
-s ->> c: create isolated container
+s ->> c: 创建环境隔离容器
 
-loop container server
-alt execve request
+loop 容器服务循环
+alt execve 请求
 
 u ->> s: execve
 
-s ->> c: execve command <br/> argv, envv, fd, rlimits, etc
+s ->> c: execve 命令 <br/> argv, envv, fd, rlimits等
 create participant e
-c ->> e: fork & map fd & drop caps <br/> clone3(CLONE_INTO_CGROUP) <br/> on kernel >= 5.7 w/ cgroup v2
+c ->> e: fork & map fd & 限制特权 <br/> 内核 >= 5.7 w/ cgroup v2 时使用 <br/> clone3(CLONE_INTO_CGROUP)
 
-opt sync cgroup (kernel < 5.7)
-e ->> c: init success
+opt 同步 cgroup (内核 < 5.7)
+e ->> c: 初始化成功
 activate e
-note over e: pause & wait ack
-c ->> s: sync request: pid
-note over s: sync: add pid into cgroup
+note over e: 暂停等待 ack
+c ->> s: 同步请求: pid
+note over s: 同步: 往 cgroup 添加 pid
 s ->> c: ack
-c ->> e: sync done
+c ->> e: 同步完成
 deactivate e
-note over e: continue
+note over e: 继续执行
 end
 
 note over e: execve
 
-opt sync after exec (kernel >= 5.7 w/ cgroup v2)
-e ->> c: init success
-c ->> s: sync request
-note over s: sync: close cgroup fd
+opt 同步 (内核 >= 5.7 w/ cgroup v2)
+e ->> c: 初始化成功
+c ->> s: 同步请求
+note over s: 同步: 关闭 cgroup fd
 s ->> c: ack
 end
 
-alt program exit normally
-e ->> c: waitpid returns
-c ->> s: execution result
+alt 正常结束
+e ->> c: waitpid 返回
+c ->> s: 运行结果
 s ->> c: kill
 c ->> e: kill all 
-else abort (TLE, MLE, etc)
+else 强制终止 (TLE, MLE, etc)
 s ->> c: kill
 c ->> e: kill all 
-e ->> c: waitpid returns
-c ->> s: execution result
+e ->> c: waitpid 返回
+c ->> s: 运行结果
 end
 
-s ->> u: execve result
+s ->> u: execve 运行结果
 
 destroy e
-e ->> c: all zombies collected
+e ->> c: 收集所有僵尸进程完成
 
 else conf / ping / open / delete / reset 
 
-u ->> s: call api
-s ->> c: send command
-c ->> s: command result
-s ->> u: return result
+u ->> s: 调用 api
+s ->> c: 发送命令
+c ->> s: 命令执行结果
+s ->> u: 返回执行结果
 
 end
 end
 
 box container
-participant c as container init 
-participant e as user program
+participant c as 容器 init 进程
+participant e as 用户程序
 end
 ```
