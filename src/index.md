@@ -9,10 +9,10 @@ hero:
   actions:
     - theme: brand
       text: 快速开始
-      link: /cn/install
+      link: /install
     - theme: alt
       text: 文档
-      link: /cn/api
+      link: /api
 
 features:
   - title: 快速

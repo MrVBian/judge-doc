@@ -39,7 +39,7 @@ export default withMermaid ({
       label: '中文',
       lang: 'cn',
     },
-    cn: {
+    en: {
       label: 'English',
       lang: 'en',
       title: "Judge Documentation",

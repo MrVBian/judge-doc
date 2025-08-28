@@ -9,10 +9,10 @@ hero:
   actions:
     - theme: brand
       text: Quick Start
-      link: /install
+      link: /en/install
     - theme: alt
       text: Documentations
-      link: /api
+      link: /en/api
 
 features:
   - title: Fast
